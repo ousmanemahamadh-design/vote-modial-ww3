@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Observatoire WW3 - Vote Mondial</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.3/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.9/topojson.min.js"></script>
+    <script src="https://datamaps.github.io/scripts/datamaps.world.min.js"></script>
+    <style>
+        body { background: #0f0f0f; color: white; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 10px; }
+        .container { background: #1a1a1a; max-width: 800px; margin: 20px auto; padding: 25px; border-radius: 15px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+        h1 { color: #e74c3c; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+        .intro { background: #222; padding: 15px; border-radius: 8px; margin-bottom: 25px; font-style: italic; border-left: 5px solid #e74c3c; text-align: left; }
+        button { padding: 15px 30px; font-size: 18px; border: none; border-radius: 8px; cursor: pointer; margin: 10px; font-weight: bold; transition: 0.3s; }
+        .btn-oui { background: #2ecc71; color: white; }
+        .btn-non { background: #e74c3c; color: white; }
+        .btn-wa { background: #25D366; color: white; width: 100%; margin-top: 20px; }
+        #map { width: 100%; height: 400px; background: #000; border-radius: 10px; margin: 20px 0; }
+        .chat { background: #000; height: 150px; overflow-y: auto; padding: 10px; text-align: left; border-radius: 5px; border: 1px solid #333; }
+        input { width: 70%; padding: 12px; border-radius: 5px; border: none; background: #222; color: white; margin-top: 10px; }
+        .privacy { background: #111; border: 1px solid #444; padding: 15px; border-radius: 8px; margin-top: 30px; text-align: left; font-size: 0.8em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Observatoire Citoyen : WW3</h1>
+        
+        <div class="intro">
+            "Le monde est à un tournant. Votre voix compte. Ce sondage anonyme cartographie l'opinion globale en temps réel."
+        </div>
+
+        <p><b>Pensez-vous que la Troisième Guerre Mondiale a commencé ?</b></p>
+        
+        <button class="btn-oui" onclick="voter('OUI')">OUI</button>
+        <button class="btn-non" onclick="voter('NON')">NON</button>
+        
+        <h2>Impact Global : <span id="total">0</span> votes</h2>
+        
+        <div id="map"></div>
+
+        <div class="chat" id="chat"></div>
+        <input type="text" id="m" placeholder="Exprimez-vous anonymement...">
+        <button onclick="envoyer()" style="padding: 10px; font-size: 14px; background: #444; color: white;">Envoyer</button>
+
+        <button class="btn-wa" onclick="partager()">Partager ce vote sur WhatsApp 📱</button>
+
+        <div class="privacy">
+            <h4 style="color: #2ecc71; margin-top: 0;">🛡️ Confidentialité</h4>
+            • Votre IP est hachée (cryptée) et jamais stockée en clair.<br>
+            • Aucune donnée personnelle n'est collectée.<br>
+            • Seul votre pays est utilisé pour la carte.
+        </div>
+    </div>
+
+    <script>
+        var socket = io();
+        var map = new Datamap({
+            element: document.getElementById('map'),
+            fills: { defaultFill: '#333', voted: '#2ecc71' },
+            projection: 'mercator',
+            geographyConfig: { highlightFillColor: '#e74c3c' }
+        });
+
+        function voter(c) {
+            fetch('/voter', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({choix:c})})
+            .then(res => res.json()).then(d => { if(d.erreur) alert(d.erreur); });
+        }
+
+        function envoyer() {
+            var i = document.getElementById('m');
+            fetch('/envoyer_message', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:i.value})});
+            i.value = '';
+        }
+
+        function partager() {
+            const texte = encodeURIComponent("🚨 VOTE MONDIAL : Quel est ton avis sur la situation mondiale ? Regarde la carte en direct ici : ");
+            window.open(`https://wa.me/?text=${texte}${window.location.href}`, '_blank');
+        }
+
+        socket.on('mise_a_jour', function(data) {
+            document.getElementById('total').innerText = data.total;
+            var up = {}; up[data.pays] = {fillKey: 'voted'};
+            map.updateChoropleth(up);
+        });
+
+        socket.on('nouveau_message', function(data) {
+            var c = document.getElementById('chat');
+            var flag = data.pays !== 'UN' ? `<img src="https://flagcdn.com/w20/${data.pays.toLowerCase()}.png">` : '🌍';
+            c.innerHTML = `<div style="margin-bottom:5px;">${flag} <b>${data.pays}:</b> ${data.texte}</div>` + c.innerHTML;
+        });
+    </script>
+</body>
+</html>
